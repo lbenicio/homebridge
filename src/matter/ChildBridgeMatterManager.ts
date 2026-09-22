@@ -270,7 +270,7 @@ export class ChildBridgeMatterManager extends BaseMatterManager {
     this.api._setMatterServer(this.matterServer)
 
     const commissioningInfo = this.matterServer.getCommissioningInfo()
-    log.info(`Matter server started for child bridge ${this.bridgeConfig.username} with commissioning info:`, commissioningInfo)
+    log.info(`Matter server started for child bridge ${this.bridgeConfig.username}.`)
 
     // Store the serial number for status updates
     this.matterSerialNumber = commissioningInfo.serialNumber
@@ -426,11 +426,7 @@ export class ChildBridgeMatterManager extends BaseMatterManager {
           }
 
           // Log commissioning info
-          if (result.commissioningInfo.qrCode && result.commissioningInfo.manualPairingCode) {
-            log.info(`📱 Commissioning codes for ${accessory.displayName}:`)
-            log.info(`   QR Code: ${result.commissioningInfo.qrCode}`)
-            log.info(`   Manual Code: ${result.commissioningInfo.manualPairingCode}`)
-          }
+          log.info(`Matter commissioning information is available in the Homebridge UI for ${accessory.displayName}.`)
         } catch (error) {
           log.error(`Failed to publish external Matter accessory ${accessory.displayName}:`, error)
         }

@@ -15,7 +15,7 @@ on:
 
 permissions:
   id-token: write
-  contents: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -47,13 +47,13 @@ jobs:
     needs: determine-npm-tag
     name: Lint
     if: needs.determine-npm-tag.outputs.npm_tag != 'none'
-    uses: homebridge/.github/.github/workflows/eslint.yml@latest
+    uses: homebridge/.github/.github/workflows/eslint.yml@6b57060fcd48cb29d388e11ec129552099bbe327
 
   build_and_test_latest:
     needs: [determine-npm-tag, lint]
     name: Build & Test (Latest)
     if: needs.determine-npm-tag.outputs.npm_tag == 'latest'
-    uses: homebridge/.github/.github/workflows/nodejs-build-and-test.yml@latest
+    uses: homebridge/.github/.github/workflows/nodejs-build-and-test.yml@6b57060fcd48cb29d388e11ec129552099bbe327
     with:
       enable_coverage: true
     secrets:
@@ -63,7 +63,7 @@ jobs:
     needs: [determine-npm-tag, lint]
     name: Build & Test (Beta)
     if: needs.determine-npm-tag.outputs.npm_tag == 'beta'
-    uses: homebridge/.github/.github/workflows/nodejs-build-and-test.yml@latest
+    uses: homebridge/.github/.github/workflows/nodejs-build-and-test.yml@6b57060fcd48cb29d388e11ec129552099bbe327
     with:
       enable_coverage: false
     secrets:
@@ -87,16 +87,16 @@ jobs:
       npm_version: ${{ steps.get-published-version.outputs.version }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
 
       - name: Upgrade NPM (OIDC Support)
-        run: npm install -g npm@latest
+        run: npm install --global --ignore-scripts npm@12.0.2
 
       - name: Install Dependencies
         run: npm ci
@@ -104,9 +104,13 @@ jobs:
       - name: Handle Prerelease Versioning
         if: needs.determine-npm-tag.outputs.npm_tag == 'beta' || needs.determine-npm-tag.outputs.npm_tag == 'alpha'
         run: |
-          # Download versioning script from homebridge/.github
           mkdir -p .github
-          wget -q https://raw.githubusercontent.com/homebridge/.github/latest/.github/npm-version-script-esm.js -O .github/npm-version-script-esm.js
+          curl --fail --location --proto '=https' --tlsv1.2 --silent --show-error \
+            https://raw.githubusercontent.com/homebridge/.github/6b57060fcd48cb29d388e11ec129552099bbe327/.github/npm-version-script-esm.js \
+            --output .github/npm-version-script-esm.js
+          printf '%s  %s\n' \
+            '80bb47470a9174a30da3ae6a7627d6c8de85573f5f326989a6daec295e1259a4' \
+            .github/npm-version-script-esm.js | sha256sum --check --strict
 
           # Run the script to set base version
           node .github/npm-version-script-esm.js ${{ github.ref }} ${{ needs.determine-npm-tag.outputs.npm_tag }}
@@ -133,7 +137,7 @@ jobs:
     if: |
       always() &&
       needs.publish-to-npm.result == 'success'
-    uses: homebridge/.github/.github/workflows/discord-webhooks.yml@latest
+    uses: homebridge/.github/.github/workflows/discord-webhooks.yml@6b57060fcd48cb29d388e11ec129552099bbe327
     with:
       title: ${{ needs.determine-npm-tag.outputs.npm_tag == 'latest' && 'Homebridge Release' || needs.determine-npm-tag.outputs.npm_tag == 'beta' && 'Homebridge Beta Release' || 'Homebridge Alpha Release' }}
       description: |

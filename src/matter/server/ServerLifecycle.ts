@@ -286,14 +286,14 @@ export class ServerLifecycle {
       // Load or generate commissioning credentials
       await deps.commissioningManager.loadOrGenerateCredentials(this.matterStoragePath!)
 
-      log.info(`Configuration: Port=${deps.config.port}, Passcode=${deps.commissioningManager.passcode}, Discriminator=${deps.commissioningManager.discriminator}`)
+      log.info(`Matter server configuration loaded on port ${deps.config.port}.`)
 
       const commissioningOptions = {
         passcode: deps.commissioningManager.passcode,
         discriminator: deps.commissioningManager.discriminator,
       }
 
-      log.info(`Using commissioning credentials: passcode=${deps.commissioningManager.passcode}, discriminator=${deps.commissioningManager.discriminator}`)
+      log.info('Matter commissioning credentials loaded.')
 
       const displayName = deps.config.displayName || 'Matter Device'
 

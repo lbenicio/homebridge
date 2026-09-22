@@ -16,7 +16,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { SubscriptionsServer } from '@matter/node'
-import { ManualPairingCodeCodec, QrCode, QrPairingCodeCodec } from '@matter/types/schema'
+import { ManualPairingCodeCodec, QrPairingCodeCodec } from '@matter/types/schema'
 
 import { Logger } from '../../logger.js'
 import { DEFAULT_PRODUCT_ID, DEFAULT_VENDOR_ID, MAX_PASSCODE_ATTEMPTS } from './ServerConfig.js'
@@ -222,7 +222,6 @@ export class CommissioningManager {
    * Generate and display commissioning information
    */
   async generateCommissioningInfo(deps: CommissioningDeps): Promise<void> {
-    const passcode = this.passcode.toString().padStart(8, '0')
     const discriminator = this.discriminator
     const vendorId = this.vendorId
     const productId = this.productId
@@ -236,7 +235,7 @@ export class CommissioningManager {
     // Format as XXXX-XXX-XXXX for display
     const manualPairingCode = `${manualCode.slice(0, 4)}-${manualCode.slice(4, 7)}-${manualCode.slice(7, 11)}`
 
-    log.info(`Encoding QR code with: passcode=${this.passcode}, discriminator=${discriminator}, vendorId=${vendorId}, productId=${productId}`)
+    log.info(`Generating Matter commissioning information for vendor ${vendorId} and product ${productId}.`)
 
     const qrCodePayload = QrPairingCodeCodec.encode([{
       version: 0,
@@ -248,8 +247,7 @@ export class CommissioningManager {
       passcode: this.passcode,
     }])
 
-    log.info(`Generated QR code: ${qrCodePayload}`)
-    log.info(`Generated manual code: ${manualPairingCode}`)
+    log.info('Matter commissioning codes generated and stored for the Homebridge UI.')
 
     // Store commissioning info
     this.commissioningInfo = {
@@ -278,20 +276,7 @@ export class CommissioningManager {
       log.warn(`Failed to save commissioning info to disk: ${errorMessage}`)
     }
 
-    // Display commissioning information
-    log.info(`${'='.repeat(60)}`)
-    log.info('📱 MATTER COMMISSIONING INFORMATION')
-    log.info('='.repeat(60))
-    log.info(`Manual Pairing Code: ${manualPairingCode}`)
-    log.info(`Passcode: ${passcode}`)
-    log.info(`Discriminator: ${discriminator}`)
-    log.info('QR Code for commissioning:')
-
-    // Generate and display QR code in terminal using matter.js native QR renderer
-    const qrCodeString = QrCode.get(qrCodePayload)
-    log.info(`\n${qrCodeString}`)
-
-    log.info(`${'='.repeat(60)}`)
+    log.info('Matter commissioning information is available in the Homebridge UI.')
   }
 
   /**

@@ -374,11 +374,7 @@ export class MatterBridgeManager extends BaseMatterManager {
           }
 
           // Log commissioning info
-          if (result.commissioningInfo.qrCode && result.commissioningInfo.manualPairingCode) {
-            log.info(`📱 Commissioning codes for ${accessory.displayName}:`)
-            log.info(`   QR Code: ${result.commissioningInfo.qrCode}`)
-            log.info(`   Manual Code: ${result.commissioningInfo.manualPairingCode}`)
-          }
+          log.info(`Matter commissioning information is available in the Homebridge UI for ${accessory.displayName}.`)
         } catch (error) {
           log.error(`Failed to publish external Matter accessory ${accessory.displayName}:`, error)
         }
