@@ -43,11 +43,29 @@ RUN npm run build
 RUN mkdir -p /out && npm pack --ignore-scripts --pack-destination /out \
   && mv /out/*.tgz /out/tuya-local.tgz
 
+FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS tuya-cloud-build
+
+ARG TUYA_CLOUD_REPO=https://github.com/lbenicio/homebridge-tuya.git
+ARG TUYA_CLOUD_REF=0431de0aaa93fd3018d8c455f8fc4c30b7b48e0d
+
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y ca-certificates git \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src/homebridge-tuya
+RUN git clone --filter=blob:none "$TUYA_CLOUD_REPO" . \
+  && git checkout --detach "$TUYA_CLOUD_REF"
+RUN npm ci --ignore-scripts --no-audit --no-fund
+RUN npm run build
+RUN mkdir -p /out && npm pack --ignore-scripts --pack-destination /out \
+  && mv /out/*.tgz /out/tuya-cloud.tgz
+
 FROM ${BASE_IMAGE}
 
 COPY --from=homebridge-build /out/homebridge-2.4.0.tgz /opt/homebridge/vendor/homebridge.tgz
 COPY --from=ui-build /out/homebridge-config-ui-x-5.29.0.tgz /opt/homebridge/vendor/homebridge-config-ui-x.tgz
 COPY --from=tuya-local-build /out/tuya-local.tgz /opt/homebridge/vendor/tuya-local.tgz
+COPY --from=tuya-cloud-build /out/tuya-cloud.tgz /opt/homebridge/vendor/tuya-cloud.tgz
 COPY docker/start.sh /opt/homebridge/start.sh
 
 RUN npm install --global --prefix /opt/homebridge --omit=dev --ignore-scripts \

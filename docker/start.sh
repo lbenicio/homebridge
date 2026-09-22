@@ -27,11 +27,9 @@ if [ -e "$HB_SERVICE_STORAGE_PATH/package.json" ]; then
   CLEAN_PACKAGE_JSON="$HB_SERVICE_STORAGE_PATH/package.json.cleaned"
   if ! jq 'del(
     .dependencies["@nubisco/homebridge-tuya-local-platform"],
-    .dependencies["@lbenicio/homebridge-tuya"],
     .dependencies["homebridge-tuya"],
     .dependencies["homebridge-tuya-platform"],
     .devDependencies["@nubisco/homebridge-tuya-local-platform"],
-    .devDependencies["@lbenicio/homebridge-tuya"],
     .devDependencies["homebridge-tuya"],
     .devDependencies["homebridge-tuya-platform"]
   )' "$HB_SERVICE_STORAGE_PATH/package.json" > "$CLEAN_PACKAGE_JSON"; then
@@ -42,7 +40,7 @@ if [ -e "$HB_SERVICE_STORAGE_PATH/package.json" ]; then
 fi
 
 npm --prefix "$HB_SERVICE_STORAGE_PATH" uninstall --save --ignore-scripts \
-  @nubisco/homebridge-tuya-local-platform @lbenicio/homebridge-tuya homebridge-tuya homebridge-tuya-platform >/dev/null 2>&1 || true
+  @nubisco/homebridge-tuya-local-platform homebridge-tuya homebridge-tuya-platform >/dev/null 2>&1 || true
 
 rm -rf "$HB_SERVICE_STORAGE_PATH/node_modules/@homebridge-plugins"/.homebridge-tuya-*
 
@@ -66,6 +64,17 @@ if [ "$(cat "$HB_SERVICE_STORAGE_PATH/.custom-tuya-local-version" 2>/dev/null)" 
     exit 1
   fi
   printf '%s' "$CUSTOM_TUYA_LOCAL_VERSION" > "$HB_SERVICE_STORAGE_PATH/.custom-tuya-local-version"
+fi
+
+CUSTOM_TUYA_CLOUD_VERSION="$(sha256sum /opt/homebridge/vendor/tuya-cloud.tgz | cut -d ' ' -f 1)"
+if [ "$(cat "$HB_SERVICE_STORAGE_PATH/.custom-tuya-cloud-version" 2>/dev/null)" != "$CUSTOM_TUYA_CLOUD_VERSION" ]; then
+  echo "Installing the bundled Tuya cloud platform plugin (installed but disabled until configured)..."
+  if ! npm --prefix "$HB_SERVICE_STORAGE_PATH" install --save --omit=dev --ignore-scripts \
+    /opt/homebridge/vendor/tuya-cloud.tgz; then
+    echo "ERROR: failed to install the bundled Tuya cloud platform plugin."
+    exit 1
+  fi
+  printf '%s' "$CUSTOM_TUYA_CLOUD_VERSION" > "$HB_SERVICE_STORAGE_PATH/.custom-tuya-cloud-version"
 fi
 
 if [ ! -f "$HB_SERVICE_STORAGE_PATH/node_modules/homebridge/package.json" ]; then
