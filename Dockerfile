@@ -13,7 +13,7 @@ RUN mkdir -p /out && npm run build && npm pack --ignore-scripts --pack-destinati
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS ui-build
 
 ARG UI_REPO=https://github.com/lbenicio/homebridge-config-ui-x.git
-ARG UI_REF=590fd6e1423d7778693c82b5a4a87f30d6812900
+ARG UI_REF=53976ed0aefcb201f798e62793e8e5d66ddb0345
 
 RUN apt-get update \
   && apt-get install --no-install-recommends -y ca-certificates git \
@@ -28,10 +28,17 @@ RUN mkdir -p /out && npm run build && npm pack --ignore-scripts --pack-destinati
 
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS tuya-local-build
 
+ARG TUYA_LOCAL_REPO=https://github.com/lbenicio/homebridge-tuya-local-platform.git
+ARG TUYA_LOCAL_REF=ddb4876e7e9a4b3a604993406e4c7de6bdac39ad
+
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y ca-certificates git \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /src/homebridge-tuya-local-platform
-COPY homebridge-tuya-local-platform/package.json homebridge-tuya-local-platform/package-lock.json ./
+RUN git clone --filter=blob:none "$TUYA_LOCAL_REPO" . \
+  && git checkout --detach "$TUYA_LOCAL_REF"
 RUN npm ci --ignore-scripts --no-audit --no-fund
-COPY homebridge-tuya-local-platform/ .
 RUN npm run build
 RUN mkdir -p /out && npm pack --ignore-scripts --pack-destination /out \
   && mv /out/*.tgz /out/tuya-local.tgz

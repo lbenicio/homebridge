@@ -20,5 +20,7 @@ dist
 # possible local testing storage
 .homebridge
 
+/homebridge-tuya-local-platform/
+
 # test
 mock
