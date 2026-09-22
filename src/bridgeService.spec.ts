@@ -2,7 +2,11 @@ import type { MockInstance } from 'vitest'
 
 import type { BridgeConfiguration } from './bridgeService.js'
 
-import { Accessory, Categories, CharacteristicWarningType, uuid } from '@homebridge/hap-nodejs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { Accessory, Categories, CharacteristicWarningType, Service, uuid } from '@homebridge/hap-nodejs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { HomebridgeAPI, InternalAPIEvent } from './api.js'
@@ -139,6 +143,45 @@ describe('bridgeService', () => {
       const passed = addBridgedAccessoriesSpy.mock.calls[0][0] as Accessory[]
       expect(passed).toHaveLength(1)
       expect(passed[0]).toBe(accessory._associatedHAPAccessory)
+    })
+
+    it('does not advertise services hidden in the UI layout', () => {
+      const tempDir = mkdtempSync(join(tmpdir(), 'homebridge-layout-'))
+      const layoutPath = join(tempDir, 'uiAccessoriesLayout.json')
+      const service = makePlatformAccessory('Hidden Service')
+      const hapAccessory = service._associatedHAPAccessory
+      const hiddenService = hapAccessory.addService(Service.Switch, 'Hidden Switch')
+      const visibleService = hapAccessory.addService(Service.Lightbulb, 'Visible Light')
+      const bridgeConfig = makeBridgeConfig({ username: 'AA:BB:CC:DD:EE:FF' })
+
+      try {
+        const bridgeService = new BridgeService(api, pluginManager, externalPortService, makeBridgeOptions({ uiAccessoryLayoutPath: layoutPath }), bridgeConfig)
+        const identifierCache = (bridgeService as any).getUiIdentifierCache(bridgeConfig.username)
+        ;(hapAccessory as any)._assignIDs(identifierCache)
+        writeFileSync(layoutPath, JSON.stringify({
+          lbenicio: [{
+            name: 'Default Room',
+            services: [{
+              bridge: bridgeConfig.username,
+              aid: (hapAccessory as any).aid,
+              iid: (hiddenService as any).iid,
+              uuid: hiddenService.UUID,
+              hidden: true,
+            }],
+          }],
+        }))
+
+        const addBridgedAccessoriesSpy = vi.spyOn(bridgeService.bridge, 'addBridgedAccessories').mockImplementation(() => {})
+
+        bridgeService.handleRegisterPlatformAccessories([service])
+
+        const passed = addBridgedAccessoriesSpy.mock.calls[0][0] as Accessory[]
+        expect(passed).toHaveLength(1)
+        expect(passed[0].services).not.toContain(hiddenService)
+        expect(passed[0].services).toContain(visibleService)
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true })
+      }
     })
 
     it('skips a duplicate-UUID accessory and logs a warning', () => {

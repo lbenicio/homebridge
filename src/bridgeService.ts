@@ -25,6 +25,8 @@ import type { SerializedPlatformAccessory } from './platformAccessory.js'
 import type { Plugin } from './plugin.js'
 import type { HomebridgeOptions } from './server.js'
 
+import { readFileSync } from 'node:fs'
+
 import {
   Accessory,
   AccessoryEventTypes,
@@ -38,6 +40,7 @@ import {
   Service,
   uuid,
 } from '@homebridge/hap-nodejs'
+import { IdentifierCache } from '@homebridge/hap-nodejs/dist/lib/model/IdentifierCache.js'
 
 import { InternalAPIEvent } from './api.js'
 import { getLogPrefix, Logger } from './logger.js'
@@ -46,6 +49,14 @@ import { PluginManager } from './pluginManager.js'
 import { StorageService } from './storageService.js'
 import { generate } from './util/mac.js'
 import getVersion from './version.js'
+
+interface UiAccessoryLayoutService {
+  bridge?: string
+  aid?: number
+  iid?: number
+  uuid?: string
+  hidden?: boolean
+}
 
 export const DEFAULT_BRIDGE_DEFAULTS = {
   vendorName: 'Homebridge',
@@ -289,6 +300,8 @@ export class BridgeService {
   private cachedAccessoriesFileLoaded = false
   private readonly publishedExternalAccessories: Map<MacAddress, PlatformAccessory> = new Map()
   private readonly publishedExternalAccessoriesMetadata: Map<MacAddress, ExternalAccessoryMetadata> = new Map()
+  private readonly uiIdentifierCaches: Map<string, IdentifierCache> = new Map()
+  private hiddenLayoutWarningLogged = false
 
   constructor(
     private api: HomebridgeAPI,
@@ -533,7 +546,12 @@ export class BridgeService {
       }
 
       try {
-        this.bridge.addBridgedAccessory(accessory._associatedHAPAccessory)
+        const hiddenServicesRemoved = this.filterHiddenUiServices(accessory._associatedHAPAccessory)
+        if (hiddenServicesRemoved === 0 || this.hasPublishableServices(accessory._associatedHAPAccessory)) {
+          this.bridge.addBridgedAccessory(accessory._associatedHAPAccessory)
+        } else {
+          log.info(`Cached accessory '${accessory.displayName}' has no visible HomeKit services; it will not be advertised.`)
+        }
       } catch (error: any) {
         log.warn(`${accessory._associatedPlugin ? getLogPrefix(accessory._associatedPlugin) : ''} Could not restore cached accessory '${accessory._associatedHAPAccessory.displayName}':`, error.message)
         orphanedAccessories.add(accessory) // remove it from the list
@@ -580,6 +598,92 @@ export class BridgeService {
     } catch (error: any) {
       log.error('Failed to save external accessories metadata to disk:', error.message)
     }
+  }
+
+  private getHiddenUiServices(): UiAccessoryLayoutService[] {
+    const layoutPath = this.bridgeOptions.uiAccessoryLayoutPath
+    if (!layoutPath) {
+      return []
+    }
+
+    try {
+      const layout = JSON.parse(readFileSync(layoutPath, 'utf8')) as Record<string, Array<{ services?: UiAccessoryLayoutService[] }>>
+      return Object.values(layout).flatMap(rooms => rooms.flatMap(room => room.services || [])).filter(service => service.hidden === true)
+    } catch (error: any) {
+      if (error?.code !== 'ENOENT' && !this.hiddenLayoutWarningLogged) {
+        this.hiddenLayoutWarningLogged = true
+        log.warn(`Failed to read hidden accessory layout '${layoutPath}': ${error.message}`)
+      }
+      return []
+    }
+  }
+
+  private getUiIdentifierCache(username: string): IdentifierCache {
+    const normalizedUsername = username.toUpperCase()
+    let cache = this.uiIdentifierCaches.get(normalizedUsername)
+    if (!cache) {
+      cache = IdentifierCache.load(normalizedUsername) || new IdentifierCache(normalizedUsername)
+      this.uiIdentifierCaches.set(normalizedUsername, cache)
+    }
+    return cache
+  }
+
+  private assignUiAccessoryIdentifiers(accessory: Accessory, username: string): void {
+    const candidate = accessory as Accessory & { _assignIDs?: (identifierCache: IdentifierCache) => void }
+    if (typeof candidate.aid === 'number' && accessory.services.every(service => typeof (service as any).iid === 'number')) {
+      return
+    }
+
+    const identifierCache = this.getUiIdentifierCache(username)
+    candidate._assignIDs?.(identifierCache)
+    identifierCache.save()
+  }
+
+  private getAccessoryAid(accessory: Accessory): number | undefined {
+    const candidate = accessory as Accessory & { aid?: number, _accessoryInfo?: { aid?: number } }
+    if (typeof candidate.aid === 'number') {
+      return candidate.aid
+    }
+    if (typeof candidate._accessoryInfo?.aid === 'number') {
+      return candidate._accessoryInfo.aid
+    }
+    return undefined
+  }
+
+  private filterHiddenUiServices(accessory: Accessory, username = this.bridgeConfig.username): number {
+    const hiddenServices = this.getHiddenUiServices()
+    if (hiddenServices.length === 0) {
+      return 0
+    }
+
+    this.assignUiAccessoryIdentifiers(accessory, username)
+    const aid = this.getAccessoryAid(accessory)
+    if (aid === undefined) {
+      return 0
+    }
+
+    const bridge = username.replaceAll(':', '').toUpperCase()
+    const servicesToRemove = accessory.services.filter((service) => {
+      if (service.UUID === Service.AccessoryInformation.UUID) {
+        return false
+      }
+      return hiddenServices.some(hidden =>
+        hidden.bridge?.replaceAll(':', '').toUpperCase() === bridge
+        && hidden.aid === aid
+        && hidden.iid === (service as any).iid
+        && hidden.uuid?.toUpperCase() === service.UUID.toUpperCase(),
+      )
+    })
+
+    servicesToRemove.forEach(service => accessory.removeService(service))
+    if (servicesToRemove.length > 0) {
+      log.info(`Suppressed ${servicesToRemove.length} hidden HomeKit service${servicesToRemove.length === 1 ? '' : 's'} from '${accessory.displayName}'.`)
+    }
+    return servicesToRemove.length
+  }
+
+  private hasPublishableServices(accessory: Accessory): boolean {
+    return accessory.services.some(service => service.UUID !== Service.AccessoryInformation.UUID)
   }
 
   handleRegisterPlatformAccessories(accessories: PlatformAccessory[]): void {
@@ -647,7 +751,12 @@ export class BridgeService {
         log.warn('A platform configured a new accessory under the plugin name \'%s\'. However no loaded plugin could be found for the name!', accessory._associatedPlugin)
       }
 
-      hapAccessories.push(accessory._associatedHAPAccessory)
+      const hiddenServicesRemoved = this.filterHiddenUiServices(accessory._associatedHAPAccessory)
+      if (hiddenServicesRemoved === 0 || this.hasPublishableServices(accessory._associatedHAPAccessory)) {
+        hapAccessories.push(accessory._associatedHAPAccessory)
+      } else {
+        log.info(`Accessory '${accessory.displayName}' has no visible HomeKit services; it will not be advertised.`)
+      }
     }
 
     this.bridge.addBridgedAccessories(hapAccessories)
@@ -660,6 +769,7 @@ export class BridgeService {
       return
     }
 
+    accessories.forEach(accessory => this.filterHiddenUiServices(accessory._associatedHAPAccessory))
     const updatedUUIDs = new Set(accessories.map(accessory => accessory.UUID))
     this.cachedPlatformAccessories = this.cachedPlatformAccessories.filter(
       accessory => !updatedUUIDs.has(accessory._associatedHAPAccessory.UUID),
@@ -696,6 +806,11 @@ export class BridgeService {
     for (const accessory of accessories) {
       const hapAccessory = accessory._associatedHAPAccessory
       const advertiseAddress = generate(hapAccessory.UUID)
+      const hiddenServicesRemoved = this.filterHiddenUiServices(hapAccessory, advertiseAddress)
+      if (hiddenServicesRemoved > 0 && !this.hasPublishableServices(hapAccessory)) {
+        log.info(`External accessory '${hapAccessory.displayName}' has no visible HomeKit services; it will not be advertised.`)
+        continue
+      }
 
       // get external port allocation
       const accessoryPort = await this.externalPortService.requestPort(advertiseAddress)
@@ -820,7 +935,12 @@ export class BridgeService {
           const accessory = this.createHAPAccessory(plugin, accessoryInstance, accessoryName, platformType, uuidBase)
 
           if (accessory) {
-            this.bridge.addBridgedAccessory(accessory)
+            const hiddenServicesRemoved = this.filterHiddenUiServices(accessory)
+            if (hiddenServicesRemoved === 0 || this.hasPublishableServices(accessory)) {
+              this.bridge.addBridgedAccessory(accessory)
+            } else {
+              logger(`Platform ${platformType} returned an accessory with no visible HomeKit services; it will not be advertised.`)
+            }
           } else {
             logger('Platform %s returned an accessory at index %d with an empty set of services. Won\'t adding it to the bridge!', platformType, index)
           }

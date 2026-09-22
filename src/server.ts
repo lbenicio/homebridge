@@ -15,6 +15,7 @@ import type { Plugin } from './plugin.js'
 import type { PluginManagerOptions } from './pluginManager.js'
 
 import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import process from 'node:process'
 
 import { AccessoryEventTypes, MDNSAdvertiser } from '@homebridge/hap-nodejs'
@@ -50,6 +51,7 @@ export interface HomebridgeOptions {
   forceColourLogging?: boolean
   customStoragePath?: string
   strictPluginResolution?: boolean
+  uiAccessoryLayoutPath?: string
 }
 
 // eslint-disable-next-line no-restricted-syntax
@@ -141,6 +143,7 @@ export class Server {
       cachedAccessoriesDir: User.cachedAccessoryPath(),
       cachedAccessoriesItemName: 'cachedAccessories',
       externalAccessoriesItemName: 'externalAccessories',
+      uiAccessoryLayoutPath: resolve(User.storagePath(), 'accessories', 'uiAccessoriesLayout.json'),
     }
 
     // shallow copy the homebridge options to the bridge options object

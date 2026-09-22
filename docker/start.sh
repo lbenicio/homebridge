@@ -34,6 +34,18 @@ if [ "$(cat "$HB_SERVICE_STORAGE_PATH/.custom-homebridge-version" 2>/dev/null)" 
   printf '%s' "$CUSTOM_HOMEBRIDGE_VERSION" > "$HB_SERVICE_STORAGE_PATH/.custom-homebridge-version"
 fi
 
+CUSTOM_TUYA_LOCAL_VERSION="$(sha256sum /opt/homebridge/vendor/tuya-local.tgz | cut -d ' ' -f 1)"
+if [ "$(cat "$HB_SERVICE_STORAGE_PATH/.custom-tuya-local-version" 2>/dev/null)" != "$CUSTOM_TUYA_LOCAL_VERSION" ]; then
+  echo "Installing the bundled Tuya local platform plugin..."
+  npm --prefix "$HB_SERVICE_STORAGE_PATH" uninstall --save --ignore-scripts @nubisco/homebridge-tuya-local-platform >/dev/null 2>&1 || true
+  if ! npm --prefix "$HB_SERVICE_STORAGE_PATH" install --save --omit=dev --ignore-scripts \
+    /opt/homebridge/vendor/tuya-local.tgz; then
+    echo "ERROR: failed to install the bundled Tuya local platform plugin."
+    exit 1
+  fi
+  printf '%s' "$CUSTOM_TUYA_LOCAL_VERSION" > "$HB_SERVICE_STORAGE_PATH/.custom-tuya-local-version"
+fi
+
 if [ ! -f "$HB_SERVICE_STORAGE_PATH/node_modules/homebridge/package.json" ]; then
   cd "$HB_SERVICE_STORAGE_PATH"
   echo "Re-installing homebridge..."

@@ -685,6 +685,7 @@ export class ChildBridgeService {
       cachedAccessoriesDir: User.cachedAccessoryPath(),
       cachedAccessoriesItemName: `cachedAccessories.${this.bridgeConfig.username.replace(COLON_RE, '').toUpperCase()}`,
       externalAccessoriesItemName: `externalAccessories.${this.bridgeConfig.username.replace(COLON_RE, '').toUpperCase()}`,
+      uiAccessoryLayoutPath: resolve(User.storagePath(), 'accessories', 'uiAccessoriesLayout.json'),
     }
 
     // shallow copy the homebridge options to the bridge options object
