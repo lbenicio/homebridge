@@ -29,7 +29,7 @@ RUN mkdir -p /out && npm run build && npm pack --ignore-scripts --pack-destinati
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS tuya-local-build
 
 ARG TUYA_LOCAL_REPO=https://github.com/lbenicio/homebridge-tuya-local-platform.git
-ARG TUYA_LOCAL_REF=f52924a2ba9ba691cb65ba504940a0b5aeb091f3
+ARG TUYA_LOCAL_REF=c889bc93e095201f8195886480181dfc7bb23619
 
 RUN apt-get update \
   && apt-get install --no-install-recommends -y ca-certificates git \
