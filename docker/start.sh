@@ -39,9 +39,6 @@ if [ -e "$HB_SERVICE_STORAGE_PATH/package.json" ]; then
   mv "$CLEAN_PACKAGE_JSON" "$HB_SERVICE_STORAGE_PATH/package.json"
 fi
 
-npm --prefix "$HB_SERVICE_STORAGE_PATH" uninstall --save --ignore-scripts \
-  @nubisco/homebridge-tuya-local-platform homebridge-tuya homebridge-tuya-platform >/dev/null 2>&1 || true
-
 rm -rf "$HB_SERVICE_STORAGE_PATH/node_modules/@homebridge-plugins"/.homebridge-tuya-*
 
 CUSTOM_HOMEBRIDGE_VERSION="$(sha256sum /opt/homebridge/vendor/homebridge.tgz | cut -d ' ' -f 1)"
