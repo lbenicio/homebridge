@@ -1,6 +1,7 @@
 
 # Mac
 .DS_Store
+uiAccessoriesLayout*
 
 # Node
 node_modules/
